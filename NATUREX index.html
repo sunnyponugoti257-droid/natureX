@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NATUREX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: status banner on top, six sensor tiles below, demo controls, event log, hardware map.
+   Look: field instrument panel. Condensed display numerals, mono for units, slate-teal neutrals. */
+:root{
+  --bg:#EDF2F3;
+  --surface:#FFFFFF;
+  --surface2:#E3EAEC;
+  --fg:#14262B;
+  --muted:#52666C;
+  --line:#C9D5D8;
+  --accent:#0E6B78;
+  --good:#14663C;
+  --warn:#8F5A00;
+  --crit:#A82B1D;
+  --font-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1A1E;
+    --surface:#15262B;
+    --surface2:#1C3036;
+    --fg:#E3EEF0;
+    --muted:#8EA6AC;
+    --line:#2A4147;
+    --accent:#4FC0CF;
+    --good:#4CC38A;
+    --warn:#E8A93C;
+    --crit:#FF7061;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1A1E;
+  --surface:#15262B;
+  --surface2:#1C3036;
+  --fg:#E3EEF0;
+  --muted:#8EA6AC;
+  --line:#2A4147;
+  --accent:#4FC0CF;
+  --good:#4CC38A;
+  --warn:#E8A93C;
+  --crit:#FF7061;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font-body);
+  font-size:15px;
+  line-height:1.5;
+  padding-block:20px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+
+[data-level="0"]{--lv:var(--good)}
+[data-level="1"]{--lv:var(--warn)}
+[data-level="2"]{--lv:var(--crit)}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.top h1{margin:0;font-family:var(--font-display);font-weight:700;font-size:38px;line-height:1;letter-spacing:.01em;text-wrap:balance}
+.top p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.live{display:flex;align-items:center;gap:10px}
+.live-chip{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--good)}
+.live-chip.paused .live-dot{background:var(--muted)}
+.live-chip:not(.paused) .live-dot{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* buttons */
+.btn{
+  font:inherit;font-size:14px;font-weight:500;
+  color:var(--fg);background:var(--surface);
+  border:1px solid var(--line);border-radius:8px;
+  padding:8px 14px;min-height:40px;cursor:pointer;
+}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* banner */
+.banner{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;
+  padding:16px 18px;border-radius:10px;
+  background:color-mix(in srgb, var(--lv) 13%, var(--surface));
+  border:1px solid color-mix(in srgb, var(--lv) 45%, transparent);
+}
+.banner .state{
+  font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--lv);display:flex;align-items:center;gap:8px;
+}
+.banner .state::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--lv)}
+.banner[data-level="2"] .state::before{animation:pulse 1s ease-in-out infinite}
+.banner .headline{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.1;flex:1 1 260px;min-width:0}
+.banner .stamp{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:14px}
+.tile{
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;
+}
+.tile header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tile h2{margin:0;font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:.05em;text-transform:uppercase}
+.part{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+.reading{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px}
+.val{font-family:var(--font-display);font-weight:600;font-size:56px;line-height:1;font-variant-numeric:tabular-nums}
+.unit{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.pill{
+  margin-left:auto;align-self:center;
+  font-size:12px;font-weight:600;letter-spacing:.02em;
+  padding:3px 10px;border-radius:999px;
+  color:var(--lv);
+  background:color-mix(in srgb, var(--lv) 15%, transparent);
+  border:1px solid color-mix(in srgb, var(--lv) 40%, transparent);
+}
+.gauge-wrap{position:relative;padding:6px 0}
+.gauge{display:flex;height:8px;border-radius:4px;overflow:hidden}
+.z{height:100%}
+.z0{background:color-mix(in srgb, var(--good) 55%, transparent)}
+.z1{background:color-mix(in srgb, var(--warn) 55%, transparent)}
+.z2{background:color-mix(in srgb, var(--crit) 55%, transparent)}
+.marker{
+  position:absolute;top:0;height:20px;width:4px;border-radius:2px;
+  background:var(--fg);transform:translateX(-50%);
+  transition:left .6s ease;
+}
+.scale{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:-6px}
+.spark-wrap{position:relative;height:44px}
+.spark-wrap svg{width:100%;height:100%;display:block;overflow:visible;color:var(--lv)}
+.spark-wrap polygon{fill:currentColor;opacity:.13}
+.spark-wrap polyline{fill:none;stroke:currentColor;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.dot{position:absolute;right:0;width:9px;height:9px;border-radius:50%;background:var(--lv);transform:translate(50%,-50%);border:2px solid var(--surface);box-sizing:content-box}
+.msg{margin:0;font-size:14px;color:var(--fg);min-height:21px}
+
+/* panels */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel h2{margin:0 0 4px;font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:.05em;text-transform:uppercase}
+.panel > p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.log li{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line);font-size:14px;min-width:0}
+.log li:first-child{border-top:0;padding-top:0}
+.log time{font-family:var(--font-mono);font-size:12px;color:var(--muted);flex:none}
+.log .bullet{flex:none;width:8px;height:8px;border-radius:50%;background:var(--lv, var(--muted));align-self:center}
+.log span.t{min-width:0;overflow-wrap:anywhere}
+
+/* data source */
+.srcrow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.modes{display:flex;flex-wrap:wrap;gap:8px}
+.topic{display:flex;flex-direction:column;gap:4px;flex:1 1 260px;min-width:0;font-size:12px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.04em}
+.topic input{
+  font-family:var(--font-mono);font-size:14px;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-height:40px;width:100%;min-width:0;
+}
+.topic input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel.source .connline{margin:10px 0 0;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+
+/* hardware table */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:9px 12px 9px 0;border-top:1px solid var(--line);vertical-align:top}
+th{font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-top:0}
+td:first-child{font-weight:600;white-space:nowrap}
+td code{font-family:var(--font-mono);font-size:13px}
+.note{margin:12px 0 0;font-size:13px;color:var(--muted)}
+
+@media (prefers-reduced-motion: reduce){
+  .live-dot,.banner .state::before{animation:none!important}
+  .marker{transition:none}
+}
+@media (max-width:480px){
+  .top h1{font-size:32px}
+  .val{font-size:50px}
+  .banner .headline{font-size:23px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>NATUREX</h1>
+      <p>Water, soil, temperature, space and fire monitoring. Prototype with simulated sensors.</p>
+    </div>
+    <div class="live">
+      <span class="live-chip" id="liveChip"><span class="live-dot"></span><span id="liveText">Live</span></span>
+      <button class="btn" id="pauseBtn" type="button">Pause</button>
+    </div>
+  </div>
+
+  <section class="panel source" aria-label="Data source">
+    <div class="srcrow">
+      <div class="modes">
+        <button class="btn primary" type="button" id="modeDemo">Demo mode</button>
+        <button class="btn" type="button" id="modeLive">Live from ESP32</button>
+      </div>
+      <label class="topic" for="topicInput">
+        <span>MQTT TOPIC (SAME AS IN THE SKETCH)</span>
+        <input id="topicInput" type="text" placeholder="ecosentinel/your-name" autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+    <p class="connline" id="connStatus">Demo mode: simulated sensors. Enter your topic and choose Live to see the ESP32 data.</p>
+  </section>
+
+  <section class="banner" id="banner" data-level="0" aria-live="polite">
+    <span class="state" id="bannerState">Normal</span>
+    <span class="headline" id="bannerHead">All sensors normal</span>
+    <span class="stamp" id="bannerStamp">Starting</span>
+  </section>
+
+  <section class="tiles" id="tiles" aria-label="Sensor readings"></section>
+
+  <div class="two">
+    <section class="panel">
+      <h2>Demo controls</h2>
+      <p>Pick a situation. The matching tile and the status bar above react within a few seconds.</p>
+      <div class="btns">
+        <button class="btn" type="button" data-scn="water">Polluted water</button>
+        <button class="btn" type="button" data-scn="soil">Dry soil</button>
+        <button class="btn" type="button" data-scn="uv">UV burst</button>
+        <button class="btn" type="button" data-scn="radio">Radio signal</button>
+        <button class="btn" type="button" data-scn="fire">Fire</button>
+        <button class="btn primary" type="button" data-scn="normal">Back to normal</button>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Event log</h2>
+      <p>Every change of status is recorded here.</p>
+      <ul class="log" id="log"></ul>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Hardware behind each tile</h2>
+    <p>Each tile maps to one low-cost sensor module wired to one ESP32 board.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Tile</th><th>Sensor module</th><th>Signal</th><th>ESP32 pin</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Water quality</td><td>pH probe with PH-4502C board</td><td>Analog 0 to 5 V</td><td><code>GPIO34</code></td></tr>
+          <tr><td>Soil condition</td><td>Capacitive soil moisture sensor</td><td>Analog</td><td><code>GPIO35</code></td></tr>
+          <tr><td>Temperature</td><td>DHT22 (or DS18B20)</td><td>Digital</td><td><code>GPIO4</code></td></tr>
+          <tr><td>UV radiation</td><td>GUVA-S12SD UV sensor</td><td>Analog</td><td><code>GPIO32</code></td></tr>
+          <tr><td>Radio waves</td><td>Small RF energy detector module</td><td>Analog</td><td><code>GPIO33</code></td></tr>
+          <tr><td>Fire sensor</td><td>IR flame sensor (KY-026 type)</td><td>Analog and digital</td><td><code>GPIO36</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The pH board can output up to 5 V, but ESP32 pins accept 3.3 V, so put a two-resistor divider between the board and GPIO34. A cheap RF detector shows that radio energy is present, not what it is. In Demo mode the numbers are simulated. In Live mode they come from the ESP32 (Wokwi simulation or real hardware) through a public MQTT broker.</p>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.4/dist/mqtt.min.js"></script>
+<script>
+(function () {
+  var N = 40;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+
+  var SENSORS = [
+    {
+      id: 'ph', name: 'Water quality', part: 'pH probe', unit: 'pH', min: 0, max: 14, dec: 2, base: 7.2, noise: 0.04,
+      zones: [[0, 6, 2], [6, 6.5, 1], [6.5, 8.5, 0], [8.5, 9, 1], [9, 14, 2]],
+      pills: ['Safe', 'Borderline', 'Polluted'], alert: 'Water is polluted',
+      msg: function (v, l) {
+        if (v < 6) return 'Polluted: water is too acidic';
+        if (v > 9) return 'Polluted: water is too alkaline';
+        if (l === 1) return 'Borderline, test the water again';
+        return 'Safe range (6.5 to 8.5)';
+      }
+    },
+    {
+      id: 'soil', name: 'Soil condition', part: 'Soil moisture', unit: '% moisture', min: 0, max: 100, dec: 0, base: 48, noise: 0.6,
+      zones: [[0, 20, 2], [20, 35, 1], [35, 65, 0], [65, 80, 1], [80, 100, 2]],
+      pills: ['Healthy', 'Check', 'Critical'], alert: 'Soil condition is critical',
+      msg: function (v) {
+        if (v < 20) return 'Very dry, the soil needs water';
+        if (v < 35) return 'Getting dry';
+        if (v <= 65) return 'Healthy moisture level';
+        if (v <= 80) return 'Quite wet';
+        return 'Waterlogged';
+      }
+    },
+    {
+      id: 'temp', name: 'Temperature', part: 'DHT22', unit: '°C', min: 0, max: 80, dec: 1, base: 28, noise: 0.15,
+      zones: [[0, 10, 1], [10, 38, 0], [38, 50, 1], [50, 80, 2]],
+      pills: ['Normal', 'Warning', 'Danger'], alert: 'Dangerous temperature',
+      msg: function (v) {
+        if (v < 10) return 'Cold';
+        if (v < 38) return 'Normal temperature';
+        if (v < 50) return 'Hot';
+        return 'Dangerous heat';
+      }
+    },
+    {
+      id: 'uv', name: 'UV radiation', part: 'GUVA-S12SD', unit: 'UV index', min: 0, max: 12, dec: 1, base: 2.2, noise: 0.1,
+      zones: [[0, 6, 0], [6, 8, 1], [8, 12, 2]],
+      pills: ['Low', 'High', 'Extreme'], alert: 'Very high UV detected',
+      msg: function (v) {
+        if (v < 3) return 'Low UV, no concern';
+        if (v < 6) return 'Moderate UV detected';
+        if (v < 8) return 'High UV detected';
+        return 'Very high UV detected';
+      }
+    },
+    {
+      id: 'rf', name: 'Radio waves', part: 'RF detector', unit: '% signal', min: 0, max: 100, dec: 0, base: 12, noise: 2,
+      zones: [[0, 40, 0], [40, 70, 1], [70, 100, 2]],
+      pills: ['None', 'Detected', 'Strong'], alert: 'Strong radio source detected',
+      msg: function (v) {
+        if (v < 40) return 'No unusual radio signal';
+        if (v < 70) return 'Radio signal detected';
+        return 'Strong radio source nearby';
+      }
+    },
+    {
+      id: 'fire', name: 'Fire sensor', part: 'IR flame sensor', unit: '% flame', min: 0, max: 100, dec: 0, base: 0, noise: 0.3,
+      zones: [[0, 20, 0], [20, 50, 1], [50, 100, 2]],
+      pills: ['No fire', 'Heat rising', 'Fire'], alert: 'Fire detected',
+      msg: function (v, l) {
+        if (l === 2) return 'Fire detected. Raise the alarm';
+        if (l === 1) return 'Heat is rising, watch closely';
+        return 'No flame, no heat spike';
+      }
+    }
+  ];
+
+  var state = {}, hist = {}, targets = {}, lastLevel = {};
+  var running = true;
+  var logItems = [];
+  var mode = 'demo';
+  var client = null;
+
+  SENSORS.forEach(function (s) {
+    state[s.id] = s.base;
+    targets[s.id] = s.base;
+    hist[s.id] = [];
+    for (var i = 0; i < N; i++) {
+      hist[s.id].push(s.base + (Math.random() - 0.5) * 2 * s.noise * 3);
+    }
+  });
+
+  /* build tiles */
+  var grid = $('#tiles');
+  SENSORS.forEach(function (s) {
+    var el = document.createElement('article');
+    el.className = 'tile';
+    el.id = 'tile-' + s.id;
+    el.dataset.level = '0';
+    var segs = s.zones.map(function (z) {
+      return '<span class="z z' + z[2] + '" style="width:' + ((z[1] - z[0]) / (s.max - s.min) * 100) + '%"></span>';
+    }).join('');
+    el.innerHTML =
+      '<header><h2>' + s.name + '</h2><span class="part">' + s.part + '</span></header>' +
+      '<div class="reading"><span class="val" data-val>--</span><span class="unit">' + s.unit + '</span><span class="pill" data-pill></span></div>' +
+      '<div class="gauge-wrap"><div class="gauge">' + segs + '</div><span class="marker" data-marker></span></div>' +
+      '<div class="scale"><span>' + s.min + '</span><span>' + s.max + '</span></div>' +
+      '<div class="spark-wrap"><svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polygon data-area></polygon><polyline data-line></polyline></svg><span class="dot" data-dot></span></div>' +
+      '<p class="msg" data-msg></p>';
+    grid.appendChild(el);
+  });
+
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function zoneLevel(s, v) {
+    for (var i = 0; i < s.zones.length; i++) {
+      if (v >= s.zones[i][0] && v < s.zones[i][1]) return s.zones[i][2];
+    }
+    return s.zones[s.zones.length - 1][2];
+  }
+
+  function evaluate(s) {
+    var lvl = zoneLevel(s, state[s.id]);
+    if (s.id === 'fire') {
+      var t = state.temp;
+      var h = hist.temp;
+      var rise = h[N - 1] - h[N - 6];
+      if (t >= 55) lvl = 2;
+      else if ((t >= 45 || rise >= 5) && lvl < 1) lvl = 1;
+    }
+    return lvl;
+  }
+
+  function tick() {
+    SENSORS.forEach(function (s) {
+      var v = state[s.id];
+      v += (targets[s.id] - v) * 0.3 + (Math.random() - 0.5) * 2 * s.noise;
+      v = clamp(v, s.min, s.max);
+      state[s.id] = v;
+      hist[s.id].push(v);
+      hist[s.id].shift();
+    });
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function clock() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function addLog(text, lvl) {
+    logItems.unshift({ time: clock(), text: text, lvl: lvl });
+    if (logItems.length > 8) logItems.pop();
+    var ul = $('#log');
+    ul.innerHTML = '';
+    logItems.forEach(function (it) {
+      var li = document.createElement('li');
+      if (it.lvl >= 0) li.dataset.level = String(it.lvl);
+      var t = document.createElement('time'); t.textContent = it.time;
+      var b = document.createElement('span'); b.className = 'bullet';
+      var x = document.createElement('span'); x.className = 't'; x.textContent = it.text;
+      li.appendChild(t); li.appendChild(b); li.appendChild(x);
+      ul.appendChild(li);
+    });
+  }
+
+  function spark(el, s) {
+    var h = hist[s.id];
+    var lo = Math.min.apply(null, h), hi = Math.max.apply(null, h);
+    var span = Math.max(hi - lo, (s.max - s.min) * 0.08);
+    var mid = (hi + lo) / 2;
+    lo = mid - span / 2;
+    var W = 200, H = 44;
+    var pts = h.map(function (v, i) {
+      var x = i / (N - 1) * W;
+      var y = H - ((v - lo) / span) * (H * 0.8) - H * 0.1;
+      return [x, y];
+    });
+    var line = pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    $('[data-line]', el).setAttribute('points', line);
+    $('[data-area]', el).setAttribute('points', line + ' ' + W + ',' + H + ' 0,' + H);
+    var last = pts[pts.length - 1];
+    $('[data-dot]', el).style.top = (last[1] / H * 100).toFixed(1) + '%';
+  }
+
+  function render() {
+    var worst = 0, count = 0, alerts = [];
+    SENSORS.forEach(function (s) {
+      var v = state[s.id], lvl = evaluate(s), el = $('#tile-' + s.id);
+      el.dataset.level = String(lvl);
+      $('[data-val]', el).textContent = v.toFixed(s.dec);
+      $('[data-pill]', el).textContent = s.pills[lvl];
+      $('[data-msg]', el).textContent = s.msg(v, lvl);
+      $('[data-marker]', el).style.left = (clamp((v - s.min) / (s.max - s.min), 0, 1) * 100) + '%';
+      spark(el, s);
+      if (lvl > 0) count++;
+      if (lvl > worst) worst = lvl;
+      if (lvl === 2) alerts.push(s);
+      if (lastLevel[s.id] !== undefined && lastLevel[s.id] !== lvl) {
+        addLog(s.name + ': ' + s.pills[lvl] + ' (' + v.toFixed(s.dec) + ' ' + s.unit + ')', lvl);
+      }
+      lastLevel[s.id] = lvl;
+    });
+    var banner = $('#banner');
+    banner.dataset.level = String(worst);
+    $('#bannerState').textContent = ['Normal', 'Attention', 'Alert'][worst];
+    var head;
+    if (worst === 0) head = 'All sensors normal';
+    else if (worst === 1) head = count + (count === 1 ? ' sensor needs attention' : ' sensors need attention');
+    else head = alerts[0].alert + (alerts.length > 1 ? ' (+' + (alerts.length - 1) + ' more)' : '');
+    $('#bannerHead').textContent = head;
+    $('#bannerStamp').textContent = 'Updated ' + clock() + (mode === 'live' ? ' · live from ESP32' : ' · simulated data');
+  }
+
+  var SCN = {
+    water: { vals: { ph: 4.6 }, text: 'Demo: polluted water started' },
+    soil: { vals: { soil: 10 }, text: 'Demo: dry soil started' },
+    uv: { vals: { uv: 10 }, text: 'Demo: UV burst started' },
+    radio: { vals: { rf: 84 }, text: 'Demo: radio signal started' },
+    fire: { vals: { fire: 88, temp: 66 }, text: 'Demo: fire started' }
+  };
+
+  document.querySelectorAll('[data-scn]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (mode !== 'demo') { addLog('Switch to Demo mode to use these buttons', -1); return; }
+      var key = b.getAttribute('data-scn');
+      if (key === 'normal') {
+        SENSORS.forEach(function (s) { targets[s.id] = s.base; });
+        addLog('Demo: back to normal', -1);
+      } else {
+        var sc = SCN[key];
+        Object.keys(sc.vals).forEach(function (id) { targets[id] = sc.vals[id]; });
+        addLog(sc.text, -1);
+      }
+      if (!running) { tick(); render(); }
+    });
+  });
+
+  $('#pauseBtn').addEventListener('click', function () {
+    running = !running;
+    this.textContent = running ? 'Pause' : 'Resume';
+    $('#liveText').textContent = running ? 'Live' : 'Paused';
+    $('#liveChip').classList.toggle('paused', !running);
+  });
+
+  /* ---------- live data from the ESP32 over MQTT ---------- */
+  var BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+
+  function setConn(t) { $('#connStatus').textContent = t; }
+
+  function disconnectLive() {
+    if (client) {
+      try { client.end(true); } catch (e) {}
+      client = null;
+    }
+  }
+
+  function applyReading(d) {
+    SENSORS.forEach(function (s) {
+      var v = d[s.id];
+      if (typeof v === 'number' && isFinite(v)) {
+        v = clamp(v, s.min, s.max);
+        state[s.id] = v;
+        hist[s.id].push(v);
+        hist[s.id].shift();
+      }
+    });
+    setConn('Live data received at ' + clock());
+    render();
+  }
+
+  function connectLive() {
+    var topic = $('#topicInput').value.trim().replace(/\/+$/, '');
+    if (!topic) { setConn('Enter your topic first, for example ecosentinel/your-name'); return false; }
+    if (typeof mqtt === 'undefined') { setConn('The MQTT library did not load. Check your internet connection.'); return false; }
+    try { localStorage.setItem('ecoTopic', topic); } catch (e) {}
+    disconnectLive();
+    setConn('Connecting to the broker...');
+    client = mqtt.connect(BROKER_URL, {
+      clientId: 'ecodash-' + Math.random().toString(16).slice(2, 10),
+      reconnectPeriod: 3000
+    });
+    client.on('connect', function () {
+      setConn('Connected. Waiting for data on ' + topic + '/telemetry');
+      client.subscribe(topic + '/telemetry');
+    });
+    client.on('message', function (t, payload) {
+      try { applyReading(JSON.parse(payload.toString())); } catch (e) {}
+    });
+    client.on('reconnect', function () { setConn('Reconnecting to the broker...'); });
+    client.on('offline', function () { setConn('Offline. Check your internet connection.'); });
+    client.on('error', function () { setConn('Connection problem. Retrying...'); });
+    return true;
+  }
+
+  function setMode(m) {
+    if (m === 'live') {
+      if (!connectLive()) return;
+    } else {
+      disconnectLive();
+      setConn('Demo mode: simulated sensors. Enter your topic and choose Live to see the ESP32 data.');
+    }
+    mode = m;
+    $('#modeDemo').classList.toggle('primary', m === 'demo');
+    $('#modeLive').classList.toggle('primary', m === 'live');
+    render();
+  }
+
+  $('#modeDemo').addEventListener('click', function () { setMode('demo'); });
+  $('#modeLive').addEventListener('click', function () { setMode('live'); });
+  $('#topicInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') setMode('live');
+  });
+
+  var urlTopic = null;
+  try { urlTopic = new URLSearchParams(location.search).get('topic'); } catch (e) {}
+  var savedTopic = null;
+  try { savedTopic = localStorage.getItem('ecoTopic'); } catch (e) {}
+  $('#topicInput').value = urlTopic || savedTopic || '';
+
+  addLog('Dashboard started, six simulated sensors online', -1);
+  render();
+  if (urlTopic) { setMode('live'); }
+  setInterval(function () {
+    if (running && mode === 'demo') { tick(); render(); }
+  }, 1000);
+})();
+</script>
+</body>
+</html>
